@@ -48,6 +48,77 @@ The pattern uses three main structural roles:
 * Originator: The live application object that holds the current state. It creates snapshots of itself and consumes them to revert its state.
 * Caretaker: The object responsible for tracking history (usually using a Vec stack). It stores and returns mementos but cannot view or modify their contents.
 
+### UML Diagrams
+
+#### Class Diagram
+
+```
+┌───────────────────────────────────────┐
+│            «Memento»                  │
+│         TextEditorMemento             │
+├───────────────────────────────────────┤
+│  ─ content: String      (private)     │
+├───────────────────────────────────────┤
+│  + clone()                            │
+│  + debug()                            │
+└───────────────────────────────────────┘
+        ▲                ▲
+        │  creates       │  restores from
+        │  (save)        │  (restore, value move)
+┌───────┴────────────────┴─────────────────┐
+│           «Originator»                   │
+│           TextEditor                     │
+├──────────────────────────────────────────┤
+│  ─ content: String        (private)      │
+├──────────────────────────────────────────┤
+│  + new()                                 │
+│  + type_text(&mut self, text: &str)      │
+│  + print_content(&self)                  │
+│  + save(&self) -> TextEditorMemento      │
+│  + restore(&mut self, memento)           │
+└───────▲──────────────────────────────────┘
+        │  emits memento (owned value)
+        │  receives it back on undo (move)
+┌───────┴──────────────────────────────────┐
+│           «Caretaker»                    │
+│         HistoryCaretaker                 │
+├──────────────────────────────────────────┤
+│  ─ history: Vec<TextEditorMemento>       │
+├──────────────────────────────────────────┤
+│  + new()                                 │
+│  + save_state(&mut self, memento)  push  │
+│  + undo(&mut self) -> Option<Memento> pop│
+└──────────────────────────────────────────┘
+
+  HistoryCaretaker ◄──holds & owns──1   0..*  TextEditorMemento
+  (stores mementos by value; cannot read their fields)
+```
+
+#### Sequence Diagram — saving state and undoing
+
+```
+ editor: TextEditor          caretaker: HistoryCaretaker
+        │                             │
+        │  type_text("Hello, ")       │
+        │───────────────────────────▶│
+        │  save() -> TextEditorMemento (clones content)
+        │───────────────────────────▶│
+        │  memento ◀──────────────── │
+        │  save_state(memento)        │ state captured
+        │  (move INTO the Vec)        │
+        │───────────────────────────▶│ history.push(memento)
+        │                             │
+        │  ... more type_text ...     │
+        │                             │
+        │  undo() -> Option<Memento>  │
+        │  (move OUT of the Vec)      │
+        │───────────────────────────▶│ history.pop()
+        │  memento ◀──────────────── │
+        │  restore(memento)           │ state rolled back
+        │  (move back into editor)    │
+        │───────────────────────────▶│
+```
+
 ### Rust-Specific Design Trade-offs
 
 | Feature | Advantage in Rust | Drawback |
